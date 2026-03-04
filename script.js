@@ -729,33 +729,41 @@ const Animation = {
     const canvas = document.getElementById('mediaCanvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+    // Draw entire video frame scaled down to canvas size
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Grab center crop to average
-    const cropSize = 32;
-    const offset = (canvas.width - cropSize) / 2;
-    const imageData = ctx.getImageData(offset, offset, cropSize, cropSize);
+    // Sample the ENTIRE frame for a true average
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
     let r = 0, g = 0, b = 0;
     const count = data.length / 4;
 
     for (let i = 0; i < data.length; i += 4) {
-      // Boost saturation slightly using simple power curve for better lights
-      r += Math.pow(data[i] / 255, 1.2) * 255;
-      g += Math.pow(data[i + 1] / 255, 1.2) * 255;
-      b += Math.pow(data[i + 2] / 255, 1.2) * 255;
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
     }
 
+    r = r / count;
+    g = g / count;
+    b = b / count;
+
+    // Boost saturation so the LED isn't washed-out
+    // Convert to HSB, amplify saturation, convert back
+    const hsb = Color.rgbToHsb(r, g, b);
+    hsb.s = Math.min(100, hsb.s * 1.4); // 40% saturation boost
+    const boosted = Color.hsbToRgb(hsb.h, hsb.s, hsb.b);
+
     state.targetColor = {
-      r: Math.min(255, r / count),
-      g: Math.min(255, g / count),
-      b: Math.min(255, b / count)
+      r: Math.min(255, boosted.r),
+      g: Math.min(255, boosted.g),
+      b: Math.min(255, boosted.b)
     };
 
     // Dynamic brightness based on luminance
     const lum = 0.2126 * state.targetColor.r + 0.7152 * state.targetColor.g + 0.0722 * state.targetColor.b;
-    state.targetBrightness = Math.max(20, lum);
+    state.targetBrightness = Math.max(40, Math.min(255, lum * 1.2));
   }
 };
 
